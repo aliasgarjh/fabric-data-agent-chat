@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+msal
+jinja2
+aiofiles
+python-multipart
+azure-ai-agents
+semantic-kernel
+python-dotenv

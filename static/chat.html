@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with MS Fabric Data Agent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            background: linear-gradient(120deg, #e0e7ff 0%, #f4f6fa 100%);
+            margin: 0; padding: 0;
+        }
+        .chat-container {
+            max-width: 480px;
+            margin: 48px auto 0 auto;
+            background: #fff;
+            border-radius: 18px;
+            box-shadow: 0 6px 32px rgba(80, 80, 180, 0.10);
+            padding: 32px 28px 24px 28px;
+            display: flex;
+            flex-direction: column;
+            min-height: 600px;
+        }
+        .chat-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .chat-header img {
+            width: 40px; height: 40px; border-radius: 8px;
+        }
+        .chat-header h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0;
+            color: #1a237e;
+            letter-spacing: -1px;
+        }
+        .chat-log {
+            flex: 1;
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 18px 14px;
+            background: #f7f9fc;
+            margin-bottom: 18px;
+            box-shadow: 0 1px 4px rgba(80, 80, 180, 0.04);
+        }
+        .message {
+            margin-bottom: 18px;
+            display: flex;
+            align-items: flex-end;
+        }
+        .bubble {
+            display: inline-block;
+            padding: 12px 18px;
+            border-radius: 18px;
+            max-width: 80%;
+            font-size: 1.08rem;
+            line-height: 1.5;
+            box-shadow: 0 2px 8px rgba(80, 80, 180, 0.06);
+        }
+        .bubble.user {
+            background: linear-gradient(90deg, #e3f2fd 60%, #bbdefb 100%);
+            color: #0d47a1;
+            margin-left: auto;
+        }
+        .bubble.agent {
+            background: linear-gradient(90deg, #e8f5e9 60%, #c8e6c9 100%);
+            color: #256029;
+            margin-right: auto;
+        }
+        form {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1.5px solid #bdbdbd;
+            font-size: 1.08rem;
+            background: #f4f6fa;
+            transition: border 0.2s;
+        }
+        input[type="text"]:focus {
+            border: 1.5px solid #1976d2;
+            outline: none;
+            background: #fff;
+        }
+        button {
+            padding: 12px 28px;
+            border-radius: 8px;
+            border: none;
+            background: linear-gradient(90deg, #1976d2 60%, #5c6bc0 100%);
+            color: #fff;
+            font-size: 1.08rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(80, 80, 180, 0.08);
+            transition: background 0.2s;
+        }
+        button:disabled {
+            background: #90caf9;
+            color: #e3e3e3;
+            cursor: not-allowed;
+        }
+        @media (max-width: 600px) {
+            .chat-container { max-width: 98vw; padding: 10vw 2vw; }
+            .chat-header h2 { font-size: 1.1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2>Chat with MS Fabric Data Agent</h2>
+        </div>
+        <div class="chat-log" id="chat-log"></div>
+        <form id="chat-form" autocomplete="off">
+            <input type="text" id="user-input" placeholder="Type your message..." autocomplete="off" required />
+            <button type="submit">Send</button>
+        </form>
+        <div id="spinner" style="display:none; text-align:center; margin-top:12px;">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/3/3a/Gray_circles_rotate.gif" alt="Loading..." style="width:32px; height:32px;" />
+            <div style="color:#888; font-size:0.98rem; margin-top:4px;">Waiting for agent response...</div>
+        </div>
+    </div>
+    <script>
+        const chatLog = document.getElementById('chat-log');
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+
+
+        function appendMessage(sender, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message';
+            const bubble = document.createElement('span');
+            bubble.className = 'bubble ' + sender;
+            bubble.textContent = text;
+            msgDiv.appendChild(bubble);
+            chatLog.appendChild(msgDiv);
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+
+        function showSpinner(show) {
+            document.getElementById('spinner').style.display = show ? 'block' : 'none';
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (!message) return;
+            appendMessage('user', message);
+            userInput.value = '';
+            userInput.disabled = true;
+            showSpinner(true);
+            let agentMsgDiv = null;
+            let agentMsgIndex = null;
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                if (!response.ok) throw new Error('Server error');
+                const data = await response.json();
+                // Show initial response (may be timeout message)
+                appendMessage('agent', data.response);
+                // If timeout, poll for late response
+                if (typeof data.response === 'string' && data.response.startsWith('Error: Agent run did not complete')) {
+                    // Insert a placeholder for late response
+                    agentMsgDiv = chatLog.lastElementChild;
+                    agentMsgIndex = Array.from(chatLog.children).indexOf(agentMsgDiv);
+                    pollForLateAgentResponse(message, agentMsgDiv, agentMsgIndex);
+                }
+            } catch (err) {
+                appendMessage('agent', 'Error: ' + err.message);
+            } finally {
+                userInput.disabled = false;
+                userInput.focus();
+                showSpinner(false);
+            }
+        });
+
+        // Poll the server for a late agent response (simulate by retrying /chat with a flag)
+        async function pollForLateAgentResponse(userMessage, agentMsgDiv, agentMsgIndex) {
+            let attempts = 0;
+            const maxAttempts = 10; // poll for up to 10 times (e.g. 10*3s = 30s)
+            const pollInterval = 3000;
+            while (attempts < maxAttempts) {
+                await new Promise(res => setTimeout(res, pollInterval));
+                try {
+                    // Optionally, you could implement a /chat/status endpoint to check thread status
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: userMessage })
+                    });
+                    if (!response.ok) continue;
+                    const data = await response.json();
+                    if (data.response && !data.response.startsWith('Error: Agent run did not complete')) {
+                        // Replace the timeout message with the real response
+                        if (agentMsgDiv && agentMsgIndex !== null) {
+                            // Remove the old timeout message
+                            chatLog.removeChild(agentMsgDiv);
+                            // Insert the new message at the same position
+                            const newMsgDiv = document.createElement('div');
+                            newMsgDiv.className = 'message';
+                            const bubble = document.createElement('span');
+                            bubble.className = 'bubble agent';
+                            bubble.textContent = data.response;
+                            newMsgDiv.appendChild(bubble);
+                            if (agentMsgIndex >= chatLog.children.length) {
+                                chatLog.appendChild(newMsgDiv);
+                            } else {
+                                chatLog.insertBefore(newMsgDiv, chatLog.children[agentMsgIndex]);
+                            }
+                            chatLog.scrollTop = chatLog.scrollHeight;
+                        }
+                        break;
+                    }
+                } catch (e) { /* ignore errors */ }
+                attempts++;
+            }
+        }
+    </script>
+    <!-- Footer removed for a cleaner, modern look -->
+</body>
+</html>
