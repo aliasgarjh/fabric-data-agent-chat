@@ -2,6 +2,7 @@
 # Chat with MS Fabric Data Agent
 
 ![Chat UI Screenshot](screenshot.png)
+
 *Modern chat UI with Entra ID login and Azure AI integration*
 
 Here's a simple, secure chat application that demonstrates how to:
