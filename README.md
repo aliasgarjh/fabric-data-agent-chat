@@ -3,7 +3,14 @@
 
 ![Chat UI Screenshot](screenshot.png)
 
+
 *Modern chat UI with Entra ID login and Azure AI integration*
+
+> **Update (June 2025):**
+> - The app is now fully stateless. **No Redis or caching server is required or used.**
+> - All chat state is handled per-request; the backend does not persist or cache chat data.
+> - Documentation, setup, and troubleshooting have been updated to reflect this change.
+
 
 Here's a simple, secure chat application that demonstrates how to:
 
@@ -13,6 +20,9 @@ Here's a simple, secure chat application that demonstrates how to:
 - Integrate Microsoft Fabric data with conversational AI using the Semantic Kernel
 - Build a professional, cloud-ready Python app following Azure and open-source best practices
 
+
+**Stateless:** No Redis or caching server is required. The backend does not store chat state. Each chat request is processed independently.
+
 This project is ideal for developers and architects looking to:
 
 - Learn how to combine Entra ID authentication, Azure AI Agent Service, and Microsoft Fabric
@@ -21,15 +31,17 @@ This project is ideal for developers and architects looking to:
 
 ---
 
+
 ## 🚀 Features
 
--- 🔐 Microsoft Entra ID (MSAL) authentication
+- 🔐 Microsoft Entra ID (MSAL) authentication
 - 🤖 Azure AI Agent Service integration
 - 📊 Fabric Data Agent as knowledge source
 - 🧠 Semantic Kernel plugin
 - 💬 Simple chat UI
 - 🔒 Secure session management
 - 📝 Easy configuration via `.env`
+- 🟢 **Stateless backend** – no Redis or caching required
 
 ---
 
@@ -63,12 +75,16 @@ flowchart LR
                                 +--------------------------+
 ```
 
+
 **Flow:**
 1. User logs in via Microsoft Entra ID (MSAL) in the browser.
 2. User sends a chat message to the FastAPI server.
 3. FastAPI server uses the user's access token to call the Azure AI Agent Service agent (in Azure AI Foundry).
 4. The Azure AI Agent Service agent uses a Fabric Data Agent as a knowledge source to answer the query.
 5. The response is returned to the user in the chat UI.
+
+
+**Stateless:** No chat history or state is stored on the backend. Each request is processed independently. Redis or any caching server is NOT required. You do **not** need to set up or run Redis for any feature.
 
 ---
 
@@ -92,8 +108,8 @@ cp .env.example .env
 # 4. Install dependencies
 pip install -r requirements.txt
 
-# 5. Run the app
-python -m uvicorn fastapi_fabric_chat:app --reload
+ # 5. Run the app
+ python -m uvicorn fastapi_fabric_chat:app --reload
 ```
 
 ---
@@ -156,6 +172,7 @@ You can add a Microsoft Fabric Data Agent as a knowledge source to your Azure AI
 
 For more details and screenshots, see the [official Microsoft documentation](https://learn.microsoft.com/en-us/azure/ai-foundry/agents/how-to/tools/fabric#setup).
 
+
 ### 3. Environment Variables
 
 Fill in your `.env` file with the following:
@@ -169,7 +186,11 @@ FABRIC_AGENT_ID=<your-agent-id>
 SESSION_SECRET=<your-random-session-secret>
 ```
 
+
+**Note:** Redis or any caching server is NOT required. The app is fully stateless. You can ignore any previous instructions or configuration related to Redis.
+
 ---
+
 
 ## 🧑‍💻 Contributing
 
@@ -195,6 +216,16 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 - Use logging for all errors and important events.
 - Regularly review and rotate secrets.
 - Use Infrastructure as Code (Bicep, Terraform) for Azure deployments.
+
+---
+
+
+## Troubleshooting
+
+- **State mismatch or session errors:** Ensure your `SESSION_SECRET` is set and consistent across restarts.
+- **Authentication issues:** Double-check your Entra ID app registration, redirect URI, and tenant settings.
+- **Fabric/AI Agent errors:** Verify your endpoint and agent IDs, and that your user has access.
+- **No Redis needed:** The app is fully stateless and does not require Redis or any caching server. If you see any references to Redis in old documentation or code, you can ignore them.
 
 ---
 

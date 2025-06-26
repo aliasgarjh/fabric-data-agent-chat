@@ -20,7 +20,6 @@ import time
 import uuid
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
-import redis.asyncio as redis
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -34,44 +33,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Redis setup with in-memory fallback for dev
-import asyncio
-class InMemoryAsyncDict:
-    def __init__(self):
-        self._store = {}
-        self._expiries = {}
-        self._lock = asyncio.Lock()
-    async def hgetall(self, key):
-        async with self._lock:
-            if key in self._expiries and self._expiries[key] < time.time():
-                self._store.pop(key, None)
-                self._expiries.pop(key, None)
-                return {}
-            return dict(self._store.get(key, {}))
-    async def hset(self, key, mapping):
-        async with self._lock:
-            if key not in self._store:
-                self._store[key] = {}
-            self._store[key].update(mapping)
-    async def expire(self, key, seconds):
-        async with self._lock:
-            self._expiries[key] = time.time() + seconds
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-try:
-    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
-    # Test connection
-    async def _test_redis():
-        try:
-            await redis_client.hgetall("__redis_test__")
-            return True
-        except Exception:
-            return False
-    if not asyncio.get_event_loop().run_until_complete(_test_redis()):
-        raise Exception("Redis unavailable")
-except Exception:
-    import warnings
-    warnings.warn("Redis unavailable, using in-memory fallback. Data will not persist across restarts.")
-    redis_client = InMemoryAsyncDict()
 # ------------------- TOKEN CREDENTIAL -------------------
 class TokenCredential:
     def __init__(self, token):
@@ -194,7 +156,7 @@ def login(request: Request):
         SCOPE,
         state=state,
         redirect_uri=REDIRECT_URI
-    )
+    )                          
     return RedirectResponse(auth_url)
 
 @app.get(REDIRECT_PATH)
@@ -245,50 +207,16 @@ async def chat(request: Request):
     if not user_id:
         return JSONResponse({"error": "User not found in session"}, status_code=401)
 
-    # Redis key for this user/message
-    msg_hash = hashlib.sha256(message.encode()).hexdigest()
-    redis_key = f"chat:{user_id}:{msg_hash}"
 
-    # Check if a late response is available
-    cached = await redis_client.hgetall(redis_key)
-    if cached and cached.get("status") == "completed":
-        return JSONResponse({"response": cached.get("response", "No response received.")})
 
-    # If a thread/run is in progress, try to resume
-    thread_id = cached.get("thread_id") if cached else None
-    run_id = cached.get("run_id") if cached else None
 
     credential = TokenCredential(access_token)
     kernel = Kernel()
     plugin = DemoFabricDataPlugin(FABRIC_PROJECT_ENDPOINT, FABRIC_AGENT_ID, credential)
-    if thread_id:
-        # Attach to existing thread
-        class ThreadObj:
-            def __init__(self, id):
-                self.id = id
-        plugin.thread = ThreadObj(thread_id)
     kernel.add_plugin(plugin, plugin_name="fabric_data_plugin")
     plugin_func = kernel.plugins["fabric_data_plugin"].functions["query_fabric_data"]
     args = KernelArguments(query=message)
     result = await plugin_func.invoke(kernel=kernel, arguments=args)
 
-    # If result is a dict, it's a timeout
-    if isinstance(result, dict) and result.get("timeout"):
-        # Save thread/run info for polling
-        await redis_client.hset(redis_key, mapping={
-            "thread_id": result["thread_id"],
-            "run_id": result["run_id"],
-            "status": "pending",
-            "response": result["message"]
-        })
-        # Set expiry (e.g., 10 min)
-        await redis_client.expire(redis_key, 600)
-        return JSONResponse({"response": result["message"]})
 
-    # Save completed response
-    await redis_client.hset(redis_key, mapping={
-        "status": "completed",
-        "response": str(result)
-    })
-    await redis_client.expire(redis_key, 600)
     return JSONResponse({"response": str(result)})
